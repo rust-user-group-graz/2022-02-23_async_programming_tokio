@@ -1,0 +1,1 @@
+reveal-md -w --theme moon slides.md
