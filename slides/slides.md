@@ -7,8 +7,8 @@ revealOptions:
 ## Agenda
 
 * Rust async/.await
-* Tokio async runtime
-* Tokio debugging tools
+* Tokio async Runtime
+* Tokio Ecosystem
 
 ---
 
@@ -18,7 +18,7 @@ revealOptions:
 
 ## Simple Definition
 
-* A system for efficiently calling functions which may return their result some time in the future
+* A system for *efficiently* calling functions which may return their result some time in the future
 
 ----
 
@@ -54,7 +54,7 @@ revealOptions:
 
 ## The "Future" trait
 
-* Central component of async programming in rust
+* Central component of async programming in Rust
 * For polling functions which may return a value now or in the *future*
 
 ----
@@ -130,17 +130,19 @@ Creates Futures out of:
 
 ### async blocks
 
-    async {
+    let block = async {
         // ...
-        println!("Hello Tokio!");
-    }.await
+        println!("Hello, Tokio!");
+    };
+    block.await;
 
 ----
 
 ### closures
 
     let sum = async move |x, y| x + y;
-    let result = sum(3, 4).await;
+    let future = sum(3, 4);
+    let result = future.await;
 
 * Still unstable feature
 * Requires the use of "move"
@@ -149,7 +151,29 @@ Creates Futures out of:
 
 ## .await
 
+* Mechanism for compile-time green-threading
+* "Lazy" evaluation
 * Possibly suspending execution of the async construct
+
+----
+
+### Lazy evaluation example
+
+    // Does not execute the body.
+    let op = async {
+        println!(", Tokio!");
+    };
+
+    // This println! comes first
+    println!("Hello");
+
+    // Calling `.await` on `op` starts executing the async code block.
+    op.await;
+
+----
+
+### .await continued...
+
 * Possibly moving between threads
 * Not safe to use Types not supporting the "Send" trait
 * Avoid holding Locks (e.g. Mutex) across .await calls
@@ -230,6 +254,23 @@ Creates Futures out of:
             ...
         }
     }
+----
+
+### #[tokio::main] macro expansion
+
+    #[tokio::main]
+    async fn main() {
+        println!("hello");
+    }
+becomes:
+
+    fn main() {
+        let mut rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            println!("hello");
+        })
+    }
+
 
 ----
 
@@ -260,6 +301,63 @@ Creates Futures out of:
         assert_eq!(None, rx.recv().await);
     }
 
+----
+
+## Example: Server
+
+    #[tokio::main]
+    async fn main() {
+        let listener = 
+            TcpListener::bind("127.0.0.1:6379").await.unwrap();
+
+        loop {
+            let (socket, _) = listener.accept().await.unwrap();
+            process(socket).await;
+        }
+    }
+
+----
+
+### ...continued
+
+    async fn process(socket: TcpStream) {
+        let mut connection = Connection::new(socket);
+
+        if let Some(frame) = connection.read_frame().await.unwrap() {
+            println!("GOT: {:?}", frame);
+
+            let response = Frame::Error("unimplemented".to_string());
+            connection.write_frame(&response).await.unwrap();
+        }
+    }
+
+----
+
+### ...with concurrency - spawn
+
+    #[tokio::main]
+    async fn main() {
+        let listener = 
+            TcpListener::bind("127.0.0.1:6379").await.unwrap();
+
+        loop {
+            let (socket, _) = listener.accept().await.unwrap();
+            tokio::spawn(async move {
+                process(socket).await;
+            });
+        }
+    }
+
+----
+
+### Tasks
+
+* Tasks are cheap
+  * 64 Bytes under the hood
+  * Feel free to spawn thousands or even millions
+* The lifetime of spawned tasks needs to be 'static
+  * All data owned by the task, no references outside 
+
 ---
 
 # Ecosystem
@@ -285,9 +383,15 @@ Creates Futures out of:
   * A "task manager" for applications using tokio
   * Terminal/text based, but visual
   * For diagnostics and debugging
+  * I plan a dedicated talk about debugging async applications in Rust
 * PROST!
   * A protocol buffer implementation for Rust
 
+----
+
+[<img src="https://user-images.githubusercontent.com/2796466/129774465-7bd2ad2f-f1a3-4830-a8fa-f72667028fa1.png">](https://github.com/tokio-rs/console)
+[<img src="https://user-images.githubusercontent.com/2796466/129774524-288c967b-6066-4f98-973d-099b3e6a2c55.png">](http://blog.pnkfx.org/blog/2021/04/26/road-to-turbowish-part-1-goals/)
+
 ---
 
-# Questions?
+# Discussion
